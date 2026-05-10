@@ -1,0 +1,33 @@
+# Variables de entorno (NUNCA subir)
+.env
+.env.local
+.env.*.local
+
+# Entorno virtual de Python
+venv/
+env/
+.venv/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# PDFs originales (pueden ser pesados)
+data/pdfs/
+
+# VS Code
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Jupyter / Colab
+.ipynb_checkpoints/
+
+# Logs
+*.log.env
+__pycache__/
+*.pyc

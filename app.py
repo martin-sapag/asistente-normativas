@@ -64,7 +64,7 @@ def generar_respuesta(pregunta: str, contexto: str) -> str:
 # --- INTERFAZ ---
 pregunta = st.text_input(
     "¿Qué querés consultar?",
-    placeholder="Ej: ¿Cuáles son los requisitos para convocar una reunión ordinaria?"
+    placeholder="Ej: ¿Cuáles son los aspectos fundamentales a evaluar en una ecografia del primer trimestre?"
 )
 
 cantidad = st.slider("Cantidad de fragmentos a consultar", 1, 5, 3)

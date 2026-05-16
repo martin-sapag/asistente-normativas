@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 from supabase import create_client
-from ingest_pdfs import procesar_carpeta
+from ocr_pdfs import procesar_carpeta
 from pathlib import Path
 
 # Carga las variables del .env
@@ -20,7 +20,7 @@ def guardar_chunks(chunks: list[dict]):
     """
     for chunk in chunks:
         dato = {
-            "contenido": chunk["texto"],
+            "contenido": chunk["contenido"],
             "fuente": chunk["fuente"],
             "indice": chunk["indice"]
         }
@@ -29,7 +29,7 @@ def guardar_chunks(chunks: list[dict]):
 
 if __name__ == "__main__":
     print("=== Procesando PDFs ===\n")
-    chunks = procesar_carpeta(Path("data/guias_clinicas"))
+    chunks = procesar_carpeta("data/guias_clinicas")
     
     print(f"\n=== Guardando {len(chunks)} chunks en Supabase ===\n")
     guardar_chunks(chunks)

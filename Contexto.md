@@ -52,6 +52,24 @@
 - `app.py`: interfaz web con campo de pregunta y visualización de fuentes
 - Pipeline completo: pregunta → embedding → búsqueda → contexto → GPT-4o-mini → respuesta
 
+### Pendientes
+- [x] Cargar PDFs reales de normativas de leche humana
+- [x] Resolver permisos función `buscar_chunks_similares` (GRANT EXECUTE TO anon)
+- [ ] OCR para PDFs escaneados
+## Bloque 8 - OCR para PDFs escaneados (16/05/2026)
+
+- ocr_pdfs.py reemplaza a ingest_pdfs.py con detección automática de páginas escaneadas
+- Motor OCR: Tesseract v5.5.0 con soporte para español (spa.traineddata)
+- pdf2image convierte cada página a imagen a 300 DPI antes del OCR
+- Umbral de 50 caracteres: páginas con menos texto se consideran escaneadas
+- Poppler instalado en C:\poppler\Library\bin (requerido por pdf2image)
+- guardar_chunks.py actualizado para importar desde ocr_pdfs en lugar de ingest_pdfs
+- 709 chunks procesados: 8 PDFs digitales + 1 PDF escaneado (38 páginas, 19 chunks)
+- El resto del pipeline (embeddings, búsqueda, Streamlit) no requirió cambios
+
+Pipeline completo: PDF (digital o escaneado) → ocr_pdfs.py → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub ✓
+el script detecta automáticamente qué páginas son escaneadas y aplica OCR solo donde hace falta, sin intervención manual.
+
 ---
 
 ## Estructura de carpetas
@@ -69,3 +87,22 @@ asistente-normativas/
 │   ├── generar_embeddings.py
 │   └── buscar.py
 └── venv/                   ← entorno virtual Python 3.11
+
+El proyecto tieene los siguientes bloques:
+
+Completados: 
+Bloque 1 — Ingestión de PDFs
+Bloque 2 — Conexión con Supabase
+Bloque 3 — Embeddings
+Bloque 4 — Búsqueda semántica
+Bloque 5 — Interfaz Streamlit
+Bloque 6 — Git y GitHub 
+Bloque 7 — Deploy en Streamlit Community Cloud
+Bloque 8 — OCR para PDFs escaneados
+
+Pendientes: 
+Bloque 9 — Deploy en VPS Hostinger con Docker
+Bloque 10 — RAG avanzado (metadata filtering, reranking)
+Bloque 11 — LangChain y LangGraph
+Bloque 12 — Primer agente
+Bloque 13 — Agente de síntesis semanal del trabajo de los Promotores Comunitarios

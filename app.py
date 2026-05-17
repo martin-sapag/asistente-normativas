@@ -34,7 +34,7 @@ def generar_embedding(texto: str) -> list[float]:
 def buscar_normativas(pregunta: str, cantidad: int = 3) -> list[dict]:
     embedding_pregunta = generar_embedding(pregunta)
     resultado = supabase.rpc(
-        "buscar_guias_similares",
+        "buscar_chunks_similares",
         {
             "query_embedding": embedding_pregunta,
             "cantidad": cantidad
@@ -48,7 +48,7 @@ def generar_respuesta(pregunta: str, contexto: str) -> str:
         messages=[
             {
                 "role": "system",
-                "content": """Sos un asistente especializado en normativas de salud pública argentina.
+                "content": """Sos un asistente especializado en guías clínicas de salud pública argentina.
                 Respondés preguntas basándote ÚNICAMENTE en los fragmentos de documentos proporcionados.
                 Si la información no está en los fragmentos, decís claramente que no encontraste esa información.
                 Respondés en español, de forma clara y concisa."""
@@ -64,8 +64,7 @@ def generar_respuesta(pregunta: str, contexto: str) -> str:
 # --- INTERFAZ ---
 pregunta = st.text_input(
     "¿Qué querés consultar?",
-    placeholder="Ej: ¿Cuáles son los aspectos fundamentales a evaluar en una ecografia del primer trimestre?"
-)
+   placeholder="Ej: ¿Cuáles son los criterios para la donación de leche humana?" )
 
 cantidad = st.slider("Cantidad de fragmentos a consultar", 1, 5, 3)
 
@@ -74,26 +73,22 @@ if st.button("Buscar", type="primary"):
         st.warning("Escribí una pregunta primero.")
     else:
         with st.spinner("Buscando en los documentos..."):
-            resultados = buscar_normativas(pregunta, cantidad)
-            
-            if not resultados:
-                st.error("No se encontraron resultados.")
-            else:
-                # Construimos el contexto para el LLM
-                contexto = "\n\n".join([
-                    f"[{r['fuente']}]\n{r['contenido']}"
-                    for r in resultados
-                ])
-                
-                respuesta = generar_respuesta(pregunta, contexto)
-                
-                # Mostramos la respuesta
-                st.subheader("Respuesta")
-                st.write(respuesta)
-                
-                # Mostramos las fuentes
-                with st.expander("Ver fragmentos fuente"):
-                    for i, r in enumerate(resultados, 1):
-                        st.markdown(f"**Fragmento {i}** — {r['fuente']} ({r['similitud']:.0%} similitud)")
-                        st.text(r['contenido'][:400])
-                        st.divider()
+            try:
+                resultados = buscar_normativas(pregunta, cantidad)
+                if not resultados:
+                    st.error("No se encontraron resultados.")
+                else:
+                    contexto = "\n\n".join([
+                        f"[{r['fuente']}]\n{r['contenido']}"
+                        for r in resultados
+                    ])
+                    respuesta = generar_respuesta(pregunta, contexto)
+                    st.subheader("Respuesta")
+                    st.write(respuesta)
+                    with st.expander("Ver fragmentos fuente"):
+                        for i, r in enumerate(resultados, 1):
+                            st.markdown(f"**Fragmento {i}** — {r['fuente']} ({r['similitud']:.0%} similitud)")
+                            st.text(r['contenido'][:400])
+                            st.divider()
+            except Exception as e:
+                st.error(f"Error: {e}")

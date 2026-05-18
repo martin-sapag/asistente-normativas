@@ -68,3 +68,23 @@ Pipeline completo hasta aquí: PDF → extracción → chunks → Supabase → e
 
 Pipeline completo: PDF (digital o escaneado) → ocr_pdfs.py → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub ✓
 el script detecta automáticamente qué páginas son escaneadas y aplica OCR solo donde hace falta, sin intervención manual.
+
+## Bloque 9 - Deploy en VPS Hostinger con Docker (18/05/2026)
+
+- VPS contratado en Hostinger: Plan KVM 2 (8GB RAM, 4 vCPU, 100GB SSD, Ubuntu 24.04)
+- Acceso SSH configurado con clave ed25519 desde Windows (pc-tincho)
+- Docker 29.5.0 y Docker Compose 5.1.3 instalados
+- Proyecto clonado desde GitHub al servidor
+- Archivo .env creado manualmente en el servidor (nunca en GitHub)
+- Dockerfile creado con Python 3.11-slim + Tesseract + Poppler
+- docker-compose.yml configurado con restart automático
+- Error resuelto: función SQL buscar_guias_similares apuntaba a tabla incorrecta (guias_clinicas_chunks → normativas_chunks)
+- Nginx instalado como proxy reverso
+- Certificado SSL con Let's Encrypt para mairuba.tech, www.mairuba.tech y asistente.mairuba.tech
+- Página de inicio creada en /var/www/mairuba/index.html
+- Arquitectura de subdominios establecida:
+  - mairuba.tech → página de inicio (mAIruba.tech)
+  - asistente.mairuba.tech → Asistente de Normativas (Streamlit)
+
+Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub → Docker → VPS → mAIruba.tech ✓
+

@@ -43,7 +43,14 @@ with st.sidebar:
     ])
 
     cantidad = st.slider("Chunks a recuperar", min_value=3, max_value=10, value=5)
-
+    alpha = st.slider(
+        "Balance semántico / BM25",
+        min_value=0.0,
+        max_value=1.0,
+        value=0.7,
+        step=0.1,
+        help="1.0 = solo semántico | 0.0 = solo palabras clave"
+    )
 # --- Convertir "Todos" a None para la función ---
 filtro_subtema  = None if subtema  == "Todos" else subtema
 filtro_tipo_doc = None if tipo_doc == "Todos" else tipo_doc
@@ -63,6 +70,7 @@ if st.button("Consultar", type="primary") and pregunta.strip():
             pregunta=pregunta,
             cantidad_final=cantidad,
             candidatos=pool,
+            alpha=alpha,
             tema="ecografia",
             subtema=filtro_subtema,
             tipo_doc=filtro_tipo_doc
@@ -77,12 +85,15 @@ if st.button("Consultar", type="primary") and pregunta.strip():
         f"Fuente: {c['fuente']} | Subtema: {c['subtema']}\n{c['contenido']}"
         for c in chunks
     ])
-
     system_prompt = """Sos un asistente médico especializado en ecografía obstétrica.
-Respondé en español, de forma clara y precisa, basándote únicamente en el contexto provisto.
-Si la información no está en el contexto, decilo explícitamente — no inventes datos.
-Citá la fuente cuando sea relevante."""
+Respondé en español, de forma clara y precisa.
 
+REGLAS:
+- Basate PRINCIPALMENTE en el contexto provisto
+- Si un fragmento es parcialmente relevante, usalo e indicá que la información es parcial
+- Si realmente no hay nada relacionado, decí: "Esta información no se encuentra en las guías disponibles"
+- Citá siempre la fuente (nombre del archivo) de cada afirmación
+- Podés usar conocimiento de fondo para contextualizar, pero marcalo claramente como tal"""
     with st.spinner("Generando respuesta..."):
         respuesta = openai_client.chat.completions.create(
             model="gpt-4o-mini",

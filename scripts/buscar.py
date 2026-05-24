@@ -20,26 +20,34 @@ def generar_embedding(texto: str) -> list[float]:
     )
     return respuesta.data[0].embedding
 
-def buscar_guias_clinicas(pregunta: str, cantidad: int = 3) -> list[dict]:
+def buscar_chunks(
+    pregunta: str,
+    cantidad: int = 5,
+    tema: str = None,
+    subtema: str = None,
+    tipo_doc: str = None
+) -> list[dict]:
     """
     Busca los chunks más relevantes para una pregunta.
-    Usa similitud coseno entre el embedding de la pregunta
-    y los embeddings almacenados en Supabase.
+    Los filtros son opcionales — si no se pasan, busca en todo el corpus.
     """
-    print(f"Buscando: '{pregunta}'\n")
-    
-    # Convertimos la pregunta en embedding
+    print(f"Buscando: '{pregunta}'")
+    if any([tema, subtema, tipo_doc]):
+        print(f"Filtros activos: tema={tema}, subtema={subtema}, tipo_doc={tipo_doc}")
+    print()
+
     embedding_pregunta = generar_embedding(pregunta)
-    
-    # Buscamos los chunks más similares en Supabase
-    resultado = supabase.rpc(
-        "buscar_guias_similares",
-        {
-            "query_embedding": embedding_pregunta,
-            "cantidad": cantidad
-        }
-    ).execute()
-    
+
+    params = {
+        "query_embedding": embedding_pregunta,
+        "match_count": cantidad,
+        "p_tema": tema,
+        "p_subtema": subtema,
+        "p_tipo_doc": tipo_doc
+    }
+
+    resultado = supabase.rpc("buscar_chunks_similares", params).execute()
+
     return resultado.data
 
 def mostrar_resultados(resultados: list[dict]):
@@ -47,17 +55,26 @@ def mostrar_resultados(resultados: list[dict]):
     if not resultados:
         print("No se encontraron resultados.")
         return
-    
+
     for i, chunk in enumerate(resultados, 1):
         print(f"--- Resultado {i} ---")
-        print(f"Fuente: {chunk['fuente']}")
-        print(f"Similitud: {chunk['similitud']:.2%}")
-        print(f"Texto: {chunk['contenido'][:300]}...")
+        print(f"Fuente:     {chunk['fuente']}")
+        print(f"Subtema:    {chunk.get('subtema', '-')}")
+        print(f"Tipo:       {chunk.get('tipo_doc', '-')}")
+        print(f"Similitud:  {chunk['similaridad']:.2%}")
+        print(f"Texto:      {chunk['contenido'][:300]}...")
         print()
 
 if __name__ == "__main__":
-    pregunta = "¿Cuáles son los requisitos para ser miembro del consejo de administración?"
-    
-    resultados = buscar_guias_clinicas(pregunta)
+    # Prueba sin filtros
+    print("=== SIN FILTROS ===")
+    resultados = buscar_chunks("¿Cómo se mide el doppler de la arteria uterina?")
     mostrar_resultados(resultados)
-    
+
+    # Prueba con filtro de subtema
+    print("=== SOLO PROCEDIMIENTOS ===")
+    resultados = buscar_chunks(
+        "¿Cómo se realiza una amniocentesis?",
+        subtema="procedimientos"
+    )
+    mostrar_resultados(resultados)

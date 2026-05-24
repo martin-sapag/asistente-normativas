@@ -3,92 +3,100 @@ import streamlit as st
 from dotenv import load_dotenv
 from openai import OpenAI
 from supabase import create_client
+from scripts.buscar import buscar_chunks
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-# --- CONFIGURACIÓN DE LA PÁGINA ---
 st.set_page_config(
     page_title="Asistente de Normativas",
-    page_icon="📋",
+    page_icon="🔬",
     layout="centered"
 )
 
-st.title("📋 Asistente de Normativas")
-st.caption("Buscá en los documentos de la Fundación Salud Para Todos")
+st.title("🔬 Asistente de Normativas")
+st.caption("Consultá guías clínicas de ecografía obstétrica")
 
-# --- FUNCIONES ---
-def generar_embedding(texto: str) -> list[float]:
-    respuesta = openai_client.embeddings.create(
-        model="text-embedding-3-small",
-        input=texto
-    )
-    return respuesta.data[0].embedding
+# --- Filtros en sidebar ---
+with st.sidebar:
+    st.header("Filtros")
+    st.caption("Opcional — dejá en 'Todos' para buscar en todo el corpus")
 
-def buscar_normativas(pregunta: str, cantidad: int = 3) -> list[dict]:
-    embedding_pregunta = generar_embedding(pregunta)
-    resultado = supabase.rpc(
-        "buscar_chunks_similares",
-        {
-            "query_embedding": embedding_pregunta,
-            "cantidad": cantidad
-        }
-    ).execute()
-    return resultado.data
+    subtema = st.selectbox("Subtema", options=[
+        "Todos",
+        "anatomia_fetal",
+        "doppler",
+        "embarazo_multiple",
+        "formacion",
+        "neurosonograma",
+        "primer_trimestre",
+        "procedimientos",
+        "segundo_trimestre",
+    ])
 
-def generar_respuesta(pregunta: str, contexto: str) -> str:
-    respuesta = openai_client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "system",
-                "content": """Sos un asistente especializado en guías clínicas de salud pública argentina.
-                Respondés preguntas basándote ÚNICAMENTE en los fragmentos de documentos proporcionados.
-                Si la información no está en los fragmentos, decís claramente que no encontraste esa información.
-                Respondés en español, de forma clara y concisa."""
-            },
-            {
-                "role": "user",
-                "content": f"Pregunta: {pregunta}\n\nFragmentos relevantes:\n{contexto}"
-            }
-        ]
-    )
-    return respuesta.choices[0].message.content
+    tipo_doc = st.selectbox("Tipo de documento", options=[
+        "Todos",
+        "guia_clinica",
+        "protocolo",
+        "manual",
+    ])
 
-# --- INTERFAZ ---
-pregunta = st.text_input(
-    "¿Qué querés consultar?",
-   placeholder="Ej: ¿Cuáles son los criterios para la donación de leche humana?" )
+    cantidad = st.slider("Chunks a recuperar", min_value=3, max_value=10, value=5)
 
-cantidad = st.slider("Cantidad de fragmentos a consultar", 1, 5, 3)
+# --- Convertir "Todos" a None para la función ---
+filtro_subtema  = None if subtema  == "Todos" else subtema
+filtro_tipo_doc = None if tipo_doc == "Todos" else tipo_doc
 
-if st.button("Buscar", type="primary"):
-    if not pregunta:
-        st.warning("Escribí una pregunta primero.")
-    else:
-        with st.spinner("Buscando en los documentos..."):
-            try:
-                resultados = buscar_normativas(pregunta, cantidad)
-                if not resultados:
-                    st.error("No se encontraron resultados.")
-                else:
-                    contexto = "\n\n".join([
-                        f"[{r['fuente']}]\n{r['contenido']}"
-                        for r in resultados
-                    ])
-                    respuesta = generar_respuesta(pregunta, contexto)
-                    st.subheader("Respuesta")
-                    st.write(respuesta)
-                    with st.expander("Ver fragmentos fuente"):
-                        for i, r in enumerate(resultados, 1):
-                            st.markdown(f"**Fragmento {i}** — {r['fuente']} ({r['similitud']:.0%} similitud)")
-                            st.text(r['contenido'][:400])
-                            st.divider()
-            except Exception as e:
-                st.error(f"Error: {e}")
+# --- Input de pregunta ---
+pregunta = st.text_area("¿Qué querés consultar?", height=100)
+
+if st.button("Consultar", type="primary") and pregunta.strip():
+
+    with st.spinner("Buscando en las guías..."):
+
+        # Búsqueda semántica con filtros
+        chunks = buscar_chunks(
+            pregunta=pregunta,
+            cantidad=cantidad,
+            tema="ecografia",
+            subtema=filtro_subtema,
+            tipo_doc=filtro_tipo_doc
+        )
+
+    if not chunks:
+        st.warning("No se encontraron fragmentos relevantes con los filtros seleccionados.")
+        st.stop()
+
+    # Construir contexto para el LLM
+    contexto = "\n\n---\n\n".join([
+        f"Fuente: {c['fuente']} | Subtema: {c['subtema']}\n{c['contenido']}"
+        for c in chunks
+    ])
+
+    system_prompt = """Sos un asistente médico especializado en ecografía obstétrica.
+Respondé en español, de forma clara y precisa, basándote únicamente en el contexto provisto.
+Si la información no está en el contexto, decilo explícitamente — no inventes datos.
+Citá la fuente cuando sea relevante."""
+
+    with st.spinner("Generando respuesta..."):
+        respuesta = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Contexto:\n{contexto}\n\nPregunta: {pregunta}"}
+            ],
+            temperature=0.2
+        )
+
+    # --- Mostrar respuesta ---
+    st.markdown("### Respuesta")
+    st.markdown(respuesta.choices[0].message.content)
+
+    # --- Mostrar fuentes ---
+    with st.expander("📄 Fuentes consultadas"):
+        for i, chunk in enumerate(chunks, 1):
+            st.markdown(f"**{i}. {chunk['fuente']}** — {chunk['subtema']} ({chunk['tipo_doc']})")
+            st.caption(f"Similitud: {chunk['similaridad']:.2%}")
+            st.text(chunk['contenido'][:400] + "...")
+            st.divider()

@@ -87,4 +87,25 @@ el script detecta automáticamente qué páginas son escaneadas y aplica OCR sol
   - asistente.mairuba.tech → Asistente de Normativas (Streamlit)
 
 Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub → Docker → VPS → mAIruba.tech ✓
+## Bloque 10 - RAG Avanzado (Mayo 2026)
 
+### 10.1 - Metadata Filtering
+- Nuevas columnas en `normativas_chunks`: `tema`, `subtema`, `tipo_doc`, `organismo`, `anio`
+- Script `scripts/poblar_metadata.py` para poblar metadata por documento
+- Función SQL `buscar_chunks_similares()` actualizada con filtros opcionales (NULL = sin filtro)
+- Interfaz Streamlit actualizada con sidebar de filtros por subtema y tipo de documento
+
+### 10.2 - Reranking con FlashRank
+- Librería: `flashrank` con modelo `ms-marco-MultiBERT-L-12` (multilingüe)
+- Pipeline en dos etapas: recuperar 20-60 candidatos → reranker selecciona top-k
+- El modelo multilingüe es crítico para corpus en español
+- Pool de candidatos adaptativo: 20 con filtro de subtema, 60 sin filtro
+
+### 10.3 - Hybrid Search
+- Librería: `rank-bm25`
+- BM25 aplicado sobre los candidatos recuperados por búsqueda semántica
+- Score final = α × score_semántico + (1-α) × score_BM25 (default α=0.7)
+- Alpha ajustable desde la interfaz Streamlit
+- Scores normalizados entre 0 y 1 antes de combinar
+
+Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → hybrid search → reranking → LLM → Streamlit → GitHub → Docker → VPS ✓

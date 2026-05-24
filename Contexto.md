@@ -124,4 +124,29 @@ Bloque 13 — Agente de síntesis semanal del trabajo de los Promotores Comunita
   - mairuba.tech → página de inicio (mAIruba.tech)
   - asistente.mairuba.tech → Asistente de Normativas (Streamlit)
 
-Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub → Docker → VPS → mAIruba.tech ✓
+Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → búsqueda semántica → Streamlit → GitHub → Docker → VPS → mAIruba.tech ✓ 
+## Bloque 10 - RAG Avanzado (24/05/2026)
+
+### 10.1 - Metadata Filtering
+- Tabla `normativas_chunks` extendida con: `tema`, `subtema`, `tipo_doc`, `organismo`, `anio`
+- 929 chunks enriquecidos con metadata (9 documentos de ecografía obstétrica)
+- `scripts/poblar_metadata.py`: asigna metadata por nombre de fuente
+- Función SQL `buscar_chunks_similares()` reemplaza a `buscar_guias_similares()`
+- Filtros opcionales: si son NULL la función ignora el filtro (compatible con código anterior)
+
+### 10.2 - Reranking
+- Motor: FlashRank con modelo `ms-marco-MultiBERT-L-12`
+- Modelo inglés (ms-marco-MiniLM-L-12-v2) descartado: scores ~0.003 en español
+- Modelo multilingüe: scores ~0.999, discriminación correcta
+- Pool adaptativo: 20 candidatos con filtro de subtema, 60 sin filtro
+
+### 10.3 - Hybrid Search
+- BM25 (rank-bm25) aplicado sobre candidatos semánticos, no sobre corpus completo
+- Normalización min-max de ambos scores antes de combinar
+- Alpha=0.7 como default (70% semántico, 30% BM25)
+- Limitación conocida: corpus pequeño y temáticamente homogéneo reduce discriminación sin filtros
+- Solución operativa: usar filtros de subtema para preguntas específicas
+
+### Pendientes identificados
+- Incorporar más documentos para mejorar retrieval sin filtros
+- Evaluar contextual chunking cuando el corpus crezca

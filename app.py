@@ -56,9 +56,13 @@ if st.button("Consultar", type="primary") and pregunta.strip():
     with st.spinner("Buscando en las guías..."):
 
         # Búsqueda semántica con filtros
+       # Sin filtro de subtema, ampliamos el pool de candidatos
+        pool = 20 if filtro_subtema else 60
+
         chunks = buscar_chunks(
             pregunta=pregunta,
-            cantidad=cantidad,
+            cantidad_final=cantidad,
+            candidatos=pool,
             tema="ecografia",
             subtema=filtro_subtema,
             tipo_doc=filtro_tipo_doc
@@ -97,6 +101,8 @@ Citá la fuente cuando sea relevante."""
     with st.expander("📄 Fuentes consultadas"):
         for i, chunk in enumerate(chunks, 1):
             st.markdown(f"**{i}. {chunk['fuente']}** — {chunk['subtema']} ({chunk['tipo_doc']})")
-            st.caption(f"Similitud: {chunk['similaridad']:.2%}")
+            col1, col2 = st.columns(2)
+            col1.caption(f"Similitud coseno: {chunk['similaridad']:.2%}")
+            col2.caption(f"Rerank score: {chunk['rerank_score']:.4f}")
             st.text(chunk['contenido'][:400] + "...")
             st.divider()

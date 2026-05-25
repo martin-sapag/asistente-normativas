@@ -1,13 +1,10 @@
 import os
 import streamlit as st
 from dotenv import load_dotenv
-from openai import OpenAI
-from supabase import create_client
-from scripts.buscar import buscar_chunks
+from rag_graph import construir_grafo
 
 load_dotenv()
 
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 st.set_page_config(
     page_title="Asistente de Normativas",
@@ -60,60 +57,30 @@ pregunta = st.text_area("¿Qué querés consultar?", height=100)
 
 if st.button("Consultar", type="primary") and pregunta.strip():
 
-    with st.spinner("Buscando en las guías..."):
+    app = construir_grafo()
 
-        # Búsqueda semántica con filtros
-       # Sin filtro de subtema, ampliamos el pool de candidatos
-        pool = 20 if filtro_subtema else 60
+    with st.spinner("Buscando y generando respuesta..."):
+        resultado = app.invoke({
+            "pregunta": pregunta,
+            "documentos": [],
+            "respuesta": "",
+            "subtema": filtro_subtema,
+            "tipo_doc": filtro_tipo_doc,
+            "cantidad": cantidad,
+            "alpha": alpha
+        })
 
-        chunks = buscar_chunks(
-            pregunta=pregunta,
-            cantidad_final=cantidad,
-            candidatos=pool,
-            alpha=alpha,
-            tema="ecografia",
-            subtema=filtro_subtema,
-            tipo_doc=filtro_tipo_doc
-        )
-
-    if not chunks:
-        st.warning("No se encontraron fragmentos relevantes con los filtros seleccionados.")
-        st.stop()
-
-    # Construir contexto para el LLM
-    contexto = "\n\n---\n\n".join([
-        f"Fuente: {c['fuente']} | Subtema: {c['subtema']}\n{c['contenido']}"
-        for c in chunks
-    ])
-    system_prompt = """Sos un asistente médico especializado en ecografía obstétrica.
-Respondé en español, de forma clara y precisa.
-
-REGLAS:
-- Basate PRINCIPALMENTE en el contexto provisto
-- Si un fragmento es parcialmente relevante, usalo e indicá que la información es parcial
-- Si realmente no hay nada relacionado, decí: "Esta información no se encuentra en las guías disponibles"
-- Citá siempre la fuente (nombre del archivo) de cada afirmación
-- Podés usar conocimiento de fondo para contextualizar, pero marcalo claramente como tal"""
-    with st.spinner("Generando respuesta..."):
-        respuesta = openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"Contexto:\n{contexto}\n\nPregunta: {pregunta}"}
-            ],
-            temperature=0.2
-        )
-
-    # --- Mostrar respuesta ---
     st.markdown("### Respuesta")
-    st.markdown(respuesta.choices[0].message.content)
+    st.markdown(resultado["respuesta"])
 
-    # --- Mostrar fuentes ---
-    with st.expander("📄 Fuentes consultadas"):
-        for i, chunk in enumerate(chunks, 1):
-            st.markdown(f"**{i}. {chunk['fuente']}** — {chunk['subtema']} ({chunk['tipo_doc']})")
-            col1, col2 = st.columns(2)
-            col1.caption(f"Similitud coseno: {chunk['similaridad']:.2%}")
-            col2.caption(f"Rerank score: {chunk['rerank_score']:.4f}")
-            st.text(chunk['contenido'][:400] + "...")
-            st.divider()
+    if resultado["documentos"]:
+        with st.expander("📄 Fuentes consultadas"):
+            for i, doc in enumerate(resultado["documentos"], 1):
+                st.markdown(f"**{i}. {doc.metadata['fuente']}** — {doc.metadata['subtema']} ({doc.metadata['tipo_doc']})")
+                col1, col2 = st.columns(2)
+                col1.caption(f"Similitud coseno: {doc.metadata['similaridad']:.2%}")
+                col2.caption(f"Rerank score: {doc.metadata['rerank_score']:.4f}")
+                st.text(doc.page_content[:400] + "...")
+                st.divider()
+
+

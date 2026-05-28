@@ -150,3 +150,73 @@ Pipeline completo: PDF → OCR → chunks → Supabase → embeddings → búsqu
 ### Pendientes identificados
 - Incorporar más documentos para mejorar retrieval sin filtros
 - Evaluar contextual chunking cuando el corpus crezca
+
+## Bloque 11 - LangChain y LangGraph (25/05/2026)
+
+### 11.1 - Refactorización con LangChain
+- `rag_chain.py`: archivo nuevo con los componentes LangChain
+- `ChatPromptTemplate`: reemplaza los f-strings del system prompt y human message
+- `ChatOpenAI`: wrappea la API de OpenAI con interfaz estándar e intercambiable
+- `StrOutputParser`: parsea la respuesta del LLM y devuelve string limpio
+- `NormativasRetriever`: clase que hereda de `BaseRetriever` y wrappea `buscar_chunks()`
+- `construir_rag_chain()`: función que devuelve la chain LCEL completa (retriever | prompt | llm | parser)
+- `buscar.py` no fue modificado: la lógica de hybrid search + reranking se mantiene intacta
+
+### 11.2 - Grafo RAG con LangGraph
+- `rag_graph.py`: archivo nuevo con el grafo de estado
+- `EstadoRAG`: TypedDict que define el estado compartido (pregunta, documentos, respuesta, filtros)
+- Nodo `recuperar`: llama al retriever y llena `documentos` en el estado
+- Nodo `generar`: construye el contexto y llama al LLM
+- Nodo `sin_contexto`: responde sin llamar al LLM cuando no hay contexto útil
+- Edge condicional `evaluar_contexto`: decide el camino según similitud coseno (umbral: 0.3)
+- Rerank score descartado como criterio: modelo `ms-marco-MultiBERT-L-12` devuelve scores ~0.999 siempre
+- `app.py` simplificado: 60 líneas, solo invoca `construir_grafo().invoke(estado_inicial)`
+
+### Archivos nuevos
+- `rag_chain.py` ← componentes LangChain
+- `rag_graph.py` ← grafo LangGraph
+
+### Archivos modificados
+- `app.py` ← reemplaza llamada directa a OpenAI por invocación del grafo
+
+### Pendientes identificados
+- El umbral de similitud coseno (0.3) es empírico: evaluar con más preguntas
+- Bloque 12 expande el grafo con nodos de reformulación y selección de herramienta
+## Bloque 12 - Primer Agente (28/05/2026)
+
+### Diseño del agente
+- Objetivo: mejorar la recuperación mediante reformulación de preguntas, sin salir del RAG
+- Decisión de diseño: el agente no responde con conocimiento general, solo con las guías ISUOG
+- La reformulación tiene valor pedagógico: se muestra al usuario con explicación de por qué mejora la búsqueda
+
+### Grafo ampliado
+- Flujo: `recuperar → evaluar_relevancia → generar` (camino feliz)
+- Flujo alternativo: `recuperar → evaluar_relevancia → reformular_pregunta → recuperar → evaluar_relevancia → informar_al_usuario`
+- Campo `intento` en el estado controla si es primera o segunda búsqueda (evita loops)
+
+### Nodos nuevos
+- `evaluar_relevancia`: guardián LLM que decide si la pregunta corresponde al dominio de ecografía obstétrica. Devuelve SÍ o NO. Reemplaza al umbral coseno como árbitro principal de relevancia
+- `reformular_pregunta`: LLM especialista en docencia que reescribe la pregunta usando los chunks recuperados como contexto. Devuelve únicamente la pregunta reformulada
+- `informar_al_usuario`: LLM que explica por qué la pregunta original no funcionó, qué cambió en la reformulada y por qué eso mejora la búsqueda. Tono docente, sin frases de cierre genéricas
+
+### Decisión técnica clave
+- El umbral coseno (0.3 → 0.4) no es confiable como detector de irrelevancia temática en corpus pequeños y homogéneos: el modelo de embeddings encuentra similitud vectorial superficial entre términos de dominios distintos
+- Solución: LLM como guardián con conocimiento del dominio
+
+### Campos nuevos en EstadoRAG
+- `pregunta_reformulada`: string vacío en estado inicial, se llena en `reformular_pregunta`
+- `intento`: arranca en 1, se incrementa a 2 en `reformular_pregunta`
+- `relevancia`: 'SÍ' o 'NO', se llena en `evaluar_relevancia`
+
+### Cambios en app.py
+- Muestra `st.warning` cuando la pregunta es irrelevante
+- Muestra la pregunta reformulada con `st.code` (copiable con un click)
+- Distingue el camino recorrido usando `intento` y `relevancia` del estado
+
+### Archivos modificados
+- `rag_graph.py` ← nodos nuevos + grafo ampliado
+- `app.py` ← UI con trazabilidad del agente
+
+### Pendientes identificados
+- Evaluar comportamiento con corpus más grande
+- Bloque 13: Agente de síntesis semanal del trabajo de los Promotores Comunitarios

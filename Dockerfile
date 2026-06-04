@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
 
 # Directorio de trabajo dentro del contenedor
 WORKDIR /app
+ENV PYTHONUNBUFFERED=1
 
 # Copiar dependencias primero (para aprovechar caché de Docker)
 COPY requirements.txt .

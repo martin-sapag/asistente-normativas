@@ -11,15 +11,16 @@ from rag_chain import construir_rag_chain, prompt, llm, parser
 # --- El Estado ---
 class EstadoRAG(TypedDict):
     pregunta: str
-    pregunta_reformulada: str        # nuevo
+    pregunta_reformulada: str
     documentos: List[Document]
     respuesta: str
     subtema: str | None
     tipo_doc: str | None
     cantidad: int
     alpha: float
-    intento: int                     # nuevo: 1 o 2
-    relevancia: str          # nuevo: 'SÍ' o 'NO'
+    intento: int
+    relevancia: str
+
 
 # --- Nodo 1: recuperar documentos ---
 def recuperar(estado: EstadoRAG) -> dict:
@@ -39,29 +40,29 @@ def recuperar(estado: EstadoRAG) -> dict:
     docs = retriever.invoke(pregunta)
     return {"documentos": docs}
 
+
 # --- Nodo 2: evaluar relevancia con LLM ---
 def evaluar_relevancia(estado: EstadoRAG) -> dict:
     print("[nodo] evaluar_relevancia")
 
-    chunks_texto = "\n\n---\n\n".join([
-        doc.page_content for doc in estado["documentos"]
-    ])
-
     prompt_relevancia = ChatPromptTemplate.from_messages([
-        ("system", """Sos un especialista en ecografía obstétrica. 
-Tu tarea es evaluar si una pregunta está relacionada con la temática de ecografía obstétrica. 
-Recibís la pregunta del usuario y los fragmentos recuperados por el sistema de búsqueda. 
-Respondé únicamente con SÍ si la pregunta es relevante para ecografía obstétrica, 
+        ("system", """Sos un especialista en ecografía obstétrica.
+Tu tarea es evaluar si una pregunta está relacionada con la temática de ecografía obstétrica.
+Respondé únicamente con SÍ si la pregunta es relevante para ecografía obstétrica,
 o NO si no lo es. No agregues explicaciones ni texto adicional."""),
-        ("human", "Pregunta: {pregunta}\n\nFragmentos recuperados:\n{chunks}")
+        ("human", "Pregunta: {pregunta}")
     ])
 
     llm_relevancia = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     chain = prompt_relevancia | llm_relevancia | StrOutputParser()
 
+    clasificacion = chain.invoke({
+        "pregunta": estado["pregunta"],
+    }).strip().upper()
 
-    print(f"[nodo] relevancia evaluada: {resultado}")
-    return {"relevancia": resultado}
+    print(f"[nodo] relevancia evaluada: {clasificacion}")
+    return {"relevancia": clasificacion}
+
 
 # --- Nodo 3: generar respuesta con contexto ---
 def generar(estado: EstadoRAG) -> dict:
@@ -80,23 +81,18 @@ def generar(estado: EstadoRAG) -> dict:
     return {"respuesta": respuesta}
 
 
-# --- Nodo 4: reformular la pregunta cuando el contexto es insuficiente ---
+# --- Nodo 4: reformular la pregunta ---
 def reformular_pregunta(estado: EstadoRAG) -> dict:
     print("[nodo] reformular_pregunta")
 
-    chunks_texto = "\n\n---\n\n".join([
-        doc.page_content for doc in estado["documentos"]
-    ])
-
     prompt_reformular = ChatPromptTemplate.from_messages([
         ("system", """Sos un especialista en docencia de ecografía obstétrica.
-Observás las preguntas que hace un alumno a las guías de ecografía obstétrica de ISUOG
-y los fragmentos recuperados por el sistema de búsqueda.
+Observás las preguntas que hace un alumno a las guías de ecografía obstétrica de ISUOG.
 Con tu conocimiento en la temática, reformulás la pregunta para mejorar los resultados.
-Recibís dos insumos: la pregunta original y los chunks recuperados por el RAG.
-Devolvé únicamente la pregunta reformulada, sin explicaciones ni texto adicional.Si la pregunta original no tiene ninguna relación con ecografía obstétrica, 
-reformulá hacia el aspecto de ecografía obstétrica más cercano al contexto 
-clínico implícito en la pregunta, o hacia una pregunta general sobre las 
+Devolvé únicamente la pregunta reformulada, sin explicaciones ni texto adicional.
+Si la pregunta original no tiene ninguna relación con ecografía obstétrica,
+reformulá hacia el aspecto de ecografía obstétrica más cercano al contexto
+clínico implícito en la pregunta, o hacia una pregunta general sobre las
 guías ISUOG si no hay contexto clínico relevante."""),
         ("human", "Pregunta: {pregunta}")
     ])
@@ -106,7 +102,6 @@ guías ISUOG si no hay contexto clínico relevante."""),
 
     pregunta_reformulada = chain.invoke({
         "pregunta": estado["pregunta"],
-        "chunks": chunks_texto
     })
 
     print(f"[nodo] pregunta reformulada: '{pregunta_reformulada}'")
@@ -116,7 +111,7 @@ guías ISUOG si no hay contexto clínico relevante."""),
     }
 
 
-# --- Nodo 5: informar al usuario cuando el segundo intento también falla ---
+# --- Nodo 5: informar al usuario ---
 def informar_al_usuario(estado: EstadoRAG) -> dict:
     print("[nodo] informar_al_usuario")
 
@@ -128,8 +123,8 @@ Tu tarea es explicarle al alumno de forma clara y didáctica:
 1. Por qué su pregunta original no obtuvo buenos resultados
 2. Qué cambió en la pregunta reformulada y por qué eso mejora la búsqueda
 3. Invitarlo a usar la pregunta reformulada
-
-Usá un tono docente, amable y concreto.No uses frases de cierre genéricas como "estoy aquí para ayudarte".
+Usá un tono docente, amable y concreto.
+No uses frases de cierre genéricas como "estoy aquí para ayudarte".
 No uses signos de exclamación.
 Sé directo y concreto, como un docente que orienta a un alumno."""),
         ("human", """Pregunta original: {pregunta}
@@ -148,35 +143,13 @@ Pregunta reformulada: {pregunta_reformulada}""")
     return {"respuesta": respuesta}
 
 
-# --- Nodo 6: responder cuando no hay contexto útil ---
+# --- Nodo 6: sin contexto ---
 def sin_contexto(estado: EstadoRAG) -> dict:
     print("[nodo] sin_contexto — no se encontraron chunks relevantes")
     return {"respuesta": "Esta información no se encuentra en las guías disponibles."}
 
 
-# --- Edge condicional: ¿hay contexto útil? ---
-def evaluar_contexto(estado: EstadoRAG) -> str:
-    docs = estado["documentos"]
-    intento = estado.get("intento", 1)
-
-    if not docs:
-        print("[edge] sin documentos")
-        return "sin_contexto" if intento == 2 else "reformular_pregunta"
-
-    mejor_similitud = max(d.metadata["similaridad"] for d in docs)
-    print(f"[edge] mejor similitud coseno: {mejor_similitud:.4f} — intento {intento}")
-
-    if mejor_similitud >= 0.4:
-        print("[edge] contexto útil → generar")
-        return "generar"
-
-    if intento == 1:
-        print("[edge] insuficiente, primer intento → reformular_pregunta")
-        return "reformular_pregunta"
-
-    print("[edge] insuficiente, segundo intento → informar_al_usuario")
-    return "informar_al_usuario"
-
+# --- Edge condicional ---
 def enrutar_por_relevancia(estado: EstadoRAG) -> str:
     intento = estado.get("intento", 1)
     relevancia = estado.get("relevancia", "SÍ")
@@ -192,11 +165,11 @@ def enrutar_por_relevancia(estado: EstadoRAG) -> str:
     print("[edge] irrelevante, segundo intento → informar_al_usuario")
     return "informar_al_usuario"
 
+
 # --- Construir el grafo ---
 def construir_grafo():
     grafo = StateGraph(EstadoRAG)
 
-    # Registrar nodos
     grafo.add_node("recuperar", recuperar)
     grafo.add_node("evaluar_relevancia", evaluar_relevancia)
     grafo.add_node("generar", generar)
@@ -204,12 +177,10 @@ def construir_grafo():
     grafo.add_node("informar_al_usuario", informar_al_usuario)
     grafo.add_node("sin_contexto", sin_contexto)
 
-    # Edges fijos
     grafo.add_edge(START, "recuperar")
     grafo.add_edge("recuperar", "evaluar_relevancia")
     grafo.add_edge("reformular_pregunta", "recuperar")
 
-    # Edge condicional desde evaluar_relevancia
     grafo.add_conditional_edges(
         "evaluar_relevancia",
         enrutar_por_relevancia,
@@ -220,14 +191,6 @@ def construir_grafo():
         }
     )
 
-    # Todos los caminos terminan en END
-    grafo.add_edge("generar", END)
-    grafo.add_edge("informar_al_usuario", END)
-    grafo.add_edge("sin_contexto", END)
-
-    return grafo.compile()
-
-    # Todos los caminos terminan en END
     grafo.add_edge("generar", END)
     grafo.add_edge("informar_al_usuario", END)
     grafo.add_edge("sin_contexto", END)
@@ -249,7 +212,8 @@ if __name__ == "__main__":
         "tipo_doc": None,
         "cantidad": 3,
         "alpha": 0.7,
-        "intento": 1                  # siempre arranca en 1
+        "intento": 1,
+        "relevancia": "",
     })
 
     print("\n=== RESPUESTA ===")

@@ -59,10 +59,6 @@ o NO si no lo es. No agregues explicaciones ni texto adicional."""),
     llm_relevancia = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     chain = prompt_relevancia | llm_relevancia | StrOutputParser()
 
-    resultado = chain.invoke({
-        "pregunta": estado["pregunta"],
-        "chunks": chunks_texto
-    }).strip().upper()
 
     print(f"[nodo] relevancia evaluada: {resultado}")
     return {"relevancia": resultado}
@@ -102,7 +98,7 @@ Devolvé únicamente la pregunta reformulada, sin explicaciones ni texto adicion
 reformulá hacia el aspecto de ecografía obstétrica más cercano al contexto 
 clínico implícito en la pregunta, o hacia una pregunta general sobre las 
 guías ISUOG si no hay contexto clínico relevante."""),
-        ("human", "Pregunta original: {pregunta}\n\nChunks recuperados:\n{chunks}")
+        ("human", "Pregunta: {pregunta}")
     ])
 
     llm_reformular = ChatOpenAI(model="gpt-4o-mini", temperature=0)
